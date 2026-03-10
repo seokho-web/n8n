@@ -6,7 +6,7 @@ import os
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# iframe 내부 실제 데이터 URL - 수습CPA 페이지
+# 수습CPA 구인 목록 URL
 URL = "https://www.kicpa.or.kr/home/jobOffrSrchNewGnrl/list.face?listCnt=20&ijEmpSep=all&"
 
 def check_kicpa():
@@ -19,66 +19,55 @@ def check_kicpa():
         res.encoding = 'utf-8'
         soup = BeautifulSoup(res.text, 'html.parser')
 
-        # 디버깅: 테이블 구조 확인
-        tables = soup.find_all('table')
-        print(f"테이블 수: {len(tables)}")
-        for i, t in enumerate(tables):
-            print(f"  테이블{i} class: {t.get('class')}")
-
-        print("=== HTML 500자 ===")
-        print(res.text[:500])
-
         rows = soup.select('table.table_st02 tbody tr')
-        print(f"rows 수: {len(rows)}")
 
         if not rows:
-            print("파싱 실패 - 테이블을 찾지 못함")
+            print("공고 없음 또는 파싱 실패")
             return
 
-        target_post = rows[0]
-        tds = target_post.find_all('td')
-        print(f"td 수: {len(tds)}")
-        for i, td in enumerate(tds):
-            print(f"  td{i}: {td.get_text(strip=True)[:50]}")
+        # 현재 공고 제목 전체 수집
+        current_titles = set()
+        for row in rows:
+            title_elem = row.find('a')
+            if title_elem:
+                current_titles.add(title_elem.get_text(strip=True))
 
-        if len(tds) < 2:
-            print("예상과 다른 테이블 구조:", target_post)
-            return
+        print(f"현재 공고 수: {len(current_titles)}")
 
-        post_id = tds[0].get_text(strip=True)
-        title_elem = target_post.find('a')
-
-        if not title_elem:
-            print("제목 링크를 찾을 수 없음")
-            return
-
-        title = title_elem.get_text(strip=True)
-        link_href = title_elem.get('href', '')
-        if link_href.startswith('http'):
-            link = link_href
-        else:
-            link = "https://www.kicpa.or.kr" + link_href
-
-        last_id = ""
+        # 이전 공고 목록 불러오기
+        last_titles = set()
         if os.path.exists("last_id.txt"):
-            with open("last_id.txt", "r") as f:
-                last_id = f.read().strip()
+            with open("last_id.txt", "r", encoding="utf-8") as f:
+                last_titles = set(line.strip() for line in f if line.strip())
 
-        print(f"최신 공고 ID: {post_id}, 저장된 ID: {last_id}")
+        # 새로 추가된 공고 찾기
+        new_titles = current_titles - last_titles
 
-        if post_id != last_id:
-            message = f"🔔 [수습CPA 신규공고]\n\n제목: {title}\n링크: {link}"
-            r = requests.post(
-                f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-                data={'chat_id': CHAT_ID, 'text': message}
-            )
-            print(f"텔레그램 전송 결과: {r.status_code}")
+        if new_titles:
+            for title in new_titles:
+                # 링크 찾기
+                for row in rows:
+                    title_elem = row.find('a')
+                    if title_elem and title_elem.get_text(strip=True) == title:
+                        link_href = title_elem.get('href', '')
+                        link = link_href if link_href.startswith('http') else "https://www.kicpa.or.kr" + link_href
+                        break
+                else:
+                    link = URL
 
-            with open("last_id.txt", "w") as f:
-                f.write(post_id)
-            print(f"새 공고 발견 및 알림 전송: {title}")
+                message = f"🔔 [수습CPA 신규공고]\n\n제목: {title}\n링크: {link}"
+                r = requests.post(
+                    f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+                    data={'chat_id': CHAT_ID, 'text': message}
+                )
+                print(f"알림 전송: {title} (결과: {r.status_code})")
         else:
-            print(f"새로운 수습 공고 없음 (최신글 ID: {post_id})")
+            print("새로운 공고 없음")
+
+        # 현재 공고 목록 저장
+        with open("last_id.txt", "w", encoding="utf-8") as f:
+            for title in current_titles:
+                f.write(title + "\n")
 
     except Exception as e:
         print(f"오류 발생: {e}")
