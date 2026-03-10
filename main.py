@@ -6,8 +6,8 @@ import os
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# iframe 내부 실제 데이터 URL (ijEmpSep=02 = 수습CPA)
-URL = "https://www.kicpa.or.kr/home/jobOffrSrchNewGnrl/list.face?listCnt=20&ijEmpSep=02"
+# iframe 내부 실제 데이터 URL - 수습CPA 페이지
+URL = "https://www.kicpa.or.kr/home/jobOffrSrchNewGnrl/list.face?listCnt=20&ijEmpSep=all&"
 
 def check_kicpa():
     headers = {
@@ -19,23 +19,32 @@ def check_kicpa():
         res.encoding = 'utf-8'
         soup = BeautifulSoup(res.text, 'html.parser')
 
-        # iframe 내부 테이블 구조: table.table_st02 tbody tr
+        # 디버깅: 테이블 구조 확인
+        tables = soup.find_all('table')
+        print(f"테이블 수: {len(tables)}")
+        for i, t in enumerate(tables):
+            print(f"  테이블{i} class: {t.get('class')}")
+
+        print("=== HTML 500자 ===")
+        print(res.text[:500])
+
         rows = soup.select('table.table_st02 tbody tr')
+        print(f"rows 수: {len(rows)}")
 
         if not rows:
-            print("현재 등록된 수습CPA 공고가 없거나 파싱 실패.")
-            print("HTML 일부:", res.text[:500])  # 디버깅용
+            print("파싱 실패 - 테이블을 찾지 못함")
             return
 
-        # 첫 번째 행(최신 공고)
         target_post = rows[0]
         tds = target_post.find_all('td')
+        print(f"td 수: {len(tds)}")
+        for i, td in enumerate(tds):
+            print(f"  td{i}: {td.get_text(strip=True)[:50]}")
 
         if len(tds) < 2:
             print("예상과 다른 테이블 구조:", target_post)
             return
 
-        # 번호(첫 번째 td), 제목 링크(두 번째 td의 a태그)
         post_id = tds[0].get_text(strip=True)
         title_elem = target_post.find('a')
 
@@ -50,7 +59,6 @@ def check_kicpa():
         else:
             link = "https://www.kicpa.or.kr" + link_href
 
-        # 중복 알림 방지
         last_id = ""
         if os.path.exists("last_id.txt"):
             with open("last_id.txt", "r") as f:
