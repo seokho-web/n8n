@@ -33,6 +33,7 @@ jobs:
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
+          touch last_id.txt
           git add last_id.txt
           git commit -m "Update last_id" || echo "No changes to commit"
-          git push
+          git push || echo "Nothing to push"
