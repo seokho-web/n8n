@@ -2,7 +2,7 @@ name: KICPA Monitor
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # 10분마다 실행
+    - cron: '*/3 * * * *'  # 3분마다 실행
   workflow_dispatch:         # 수동 실행 버튼
 
 jobs:
